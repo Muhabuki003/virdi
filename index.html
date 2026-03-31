@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TERMINAL — Autonomous Logistics</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #000;
+      overflow: hidden;
+      font-family: 'Courier New', monospace;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    canvas {
+      display: block;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+    }
+
+    #ui {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    #nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 24px 40px;
+      font-size: 11px;
+      letter-spacing: 3px;
+      color: rgba(255,255,255,0.55);
+      text-transform: uppercase;
+    }
+
+    #logo {
+      color: #fff;
+      font-size: 14px;
+      letter-spacing: 6px;
+      font-weight: 700;
+    }
+
+    #bottom-bar {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      padding: 28px 30px;
+      display: flex;
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .feature-card {
+      flex: 1;
+      background: rgba(10, 15, 20, 0.72);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 6px;
+      padding: 16px 18px;
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      backdrop-filter: blur(12px);
+    }
+
+    .feature-card .icon {
+      width: 38px;
+      height: 38px;
+      border: 1px solid rgba(255,140,40,0.4);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .feature-card .icon svg {
+      width: 18px; height: 18px;
+    }
+
+    .feature-card .label {
+      font-size: 9px;
+      letter-spacing: 2.5px;
+      color: #fff;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+      font-weight: 700;
+    }
+
+    .feature-card .desc {
+      font-size: 10px;
+      color: rgba(255,255,255,0.45);
+      line-height: 1.6;
+      letter-spacing: 0.5px;
+    }
+
+    #hud-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+    }
+
+    .hud-element {
+      position: absolute;
+      font-size: 9px;
+      letter-spacing: 1.5px;
+      color: rgba(255,140,30,0.7);
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="ui">
+  <div id="nav">
+    <span>FLEET STATUS</span>
+    <span id="logo">TERMINAL</span>
+    <span>PRE-ORDER</span>
+  </div>
+
+  <canvas id="hud-overlay" style="position:absolute;top:0;left:0;pointer-events:none;"></canvas>
+
+  <div id="bottom-bar">
+    <div class="feature-card">
+      <div class="icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,140,30,0.9)" stroke-width="1.5">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+        </svg>
+      </div>
+      <div>
+        <div class="label">AI Yard Orchestration</div>
+        <div class="desc">Connect to any terminal and let autonomous agents orchestrate your entire fleet in real time.</div>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,140,30,0.9)" stroke-width="1.5">
+          <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+        </svg>
+      </div>
+      <div>
+        <div class="label">Computer Vision Tracking</div>
+        <div class="desc">Drone-mounted sensors scan every asset, providing live GPS coordinates and condition reports.</div>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,140,30,0.9)" stroke-width="1.5">
+          <path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/>
+        </svg>
+      </div>
+      <div>
+        <div class="label">Predictive Dispatch</div>
+        <div class="desc">Machine-learning engines forecast load patterns and auto-route convoys for peak efficiency.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ─── SCENE SETUP ────────────────────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.85;
+renderer.outputEncoding = THREE.sRGBEncoding;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x010810, 0.018);
+scene.background = new THREE.Color(0x010810);
+
+const camera = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.1, 600);
+
+// ─── LIGHTING ────────────────────────────────────────────────────────────────
+const ambientLight = new THREE.AmbientLight(0x102030, 0.6);
+scene.add(ambientLight);
+
+const moonLight = new THREE.DirectionalLight(0x2040a0, 1.2);
+moonLight.position.set(-40, 60, -20);
+moonLight.castShadow = true;
+moonLight.shadow.mapSize.set(2048, 2048);
+moonLight.shadow.camera.far = 200;
+moonLight.shadow.camera.left = -80;
+moonLight.shadow.camera.right = 80;
+moonLight.shadow.camera.top = 80;
+moonLight.shadow.camera.bottom = -80;
+scene.add(moonLight);
+
+const rimLight = new THREE.DirectionalLight(0xff6820, 0.9);
+rimLight.position.set(30, 20, 30);
+scene.add(rimLight);
+
+// ─── GROUND ───────────────────────────────────────────────────────────────────
+const groundGeo = new THREE.PlaneGeometry(400, 400, 80, 80);
+const groundMat = new THREE.MeshStandardMaterial({
+  color: 0x080c10,
+  roughness: 0.9,
+  metalness: 0.3,
+});
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// ─── GROUND DATA LINES ────────────────────────────────────────────────────────
+function makeDataLine(points, color, opacity) {
+  const geo = new THREE.BufferGeometry().setFromPoints(points);
+  const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity });
+  return new THREE.Line(geo, mat);
+}
+
+const dataLineGroup = new THREE.Group();
+// Main convoy path (orange)
+for (let lane = -1; lane <= 1; lane++) {
+  const pts = [];
+  for (let i = -80; i <= 80; i += 2) {
+    pts.push(new THREE.Vector3(lane * 5, 0.05, i));
+  }
+  dataLineGroup.add(makeDataLine(pts, 0xff7020, 0.5 + lane * 0.1));
+}
+// Cross lines (green teal)
+for (let z = -60; z <= 60; z += 15) {
+  const pts = [new THREE.Vector3(-40, 0.05, z), new THREE.Vector3(40, 0.05, z)];
+  dataLineGroup.add(makeDataLine(pts, 0x00ffaa, 0.2));
+}
+scene.add(dataLineGroup);
+
+// ─── HELPER: BOX ─────────────────────────────────────────────────────────────
+function box(w, h, d, color, roughness = 0.7, metalness = 0.3) {
+  const g = new THREE.BoxGeometry(w, h, d);
+  const m = new THREE.MeshStandardMaterial({ color, roughness, metalness });
+  return new THREE.Mesh(g, m);
+}
+
+function cylinder(rt, rb, h, seg, color, roughness = 0.8, metalness = 0.5) {
+  const g = new THREE.CylinderGeometry(rt, rb, h, seg);
+  const m = new THREE.MeshStandardMaterial({ color, roughness, metalness });
+  return new THREE.Mesh(g, m);
+}
+
+// ─── TRUCK BUILDER ───────────────────────────────────────────────────────────
+function buildTruck(isHero = false) {
+  const truckGroup = new THREE.Group();
+  const cabColor = isHero ? 0x0a0f14 : 0x0d1218;
+  const accentColor = isHero ? 0xff6a00 : 0xcc4400;
+  const metalness = isHero ? 0.7 : 0.5;
+  const roughness = isHero ? 0.25 : 0.45;
+
+  // === CAB ===
+  const cabBody = box(4.2, 2.6, 5, cabColor, roughness, metalness);
+  cabBody.position.set(0, 1.8, 1.0);
+  cabBody.castShadow = true;
+  truckGroup.add(cabBody);
+
+  // Cab top sleeper box
+  const sleeper = box(4.2, 1.3, 2, 0x080d12, roughness + 0.1, metalness);
+  sleeper.position.set(0, 3.3, 2.0);
+  truckGroup.add(sleeper);
+
+  // Windshield
+  const windshield = box(3.8, 1.2, 0.12, 0x1a3a5c, 0.1, 0.9);
+  windshield.position.set(0, 2.6, -1.46);
+  truckGroup.add(windshield);
+
+  // Headlight pods
+  [-1.6, 1.6].forEach(x => {
+    const hLight = box(0.7, 0.25, 0.15, 0xffffff, 0.05, 1.0);
+    hLight.position.set(x, 1.65, -1.52);
+    truckGroup.add(hLight);
+    // Light glow point
+    const lp = new THREE.PointLight(0xfff0c0, isHero ? 3 : 1.5, 12);
+    lp.position.set(x, 1.65, -1.8);
+    truckGroup.add(lp);
+  });
+
+  // Orange accent stripe along cab
+  const stripe = box(4.25, 0.12, 5.05, accentColor, 0.4, 0.6);
+  stripe.position.set(0, 0.7, 1.0);
+  truckGroup.add(stripe);
+
+  // Grill
+  const grill = box(3.6, 0.9, 0.18, 0x1a1a1a, 0.6, 0.8);
+  grill.position.set(0, 1.35, -1.52);
+  truckGroup.add(grill);
+
+  // Front bumper
+  const bumper = box(4.4, 0.35, 0.35, 0x1c2a2a, 0.5, 0.8);
+  bumper.position.set(0, 0.85, -1.6);
+  truckGroup.add(bumper);
+
+  // === EXHAUST STACKS ===
+  [-1.9, 1.9].forEach(x => {
+    const stack = cylinder(0.12, 0.14, 2.2, 8, 0x222222, 0.5, 0.8);
+    stack.position.set(x, 3.8, 0.8);
+    truckGroup.add(stack);
+  });
+
+  // === WHEELS (cab) ===
+  const wheelPositions = [
+    [-2.3, 0, -1.1], [2.3, 0, -1.1],
+    [-2.3, 0, 2.2], [2.3, 0, 2.2],
+    [-2.5, 0, 2.8], [2.5, 0, 2.8],
+  ];
+  wheelPositions.forEach(([x, y, z]) => {
+    const rim = cylinder(0.62, 0.62, 0.5, 20, 0x1a1a1a, 0.8, 0.6);
+    rim.rotation.z = Math.PI / 2;
+    rim.position.set(x, 0.62, z);
+    rim.castShadow = true;
+    truckGroup.add(rim);
+    const hubcap = cylinder(0.28, 0.28, 0.52, 10, 0x303030, 0.4, 0.9);
+    hubcap.rotation.z = Math.PI / 2;
+    hubcap.position.set(x, 0.62, z);
+    truckGroup.add(hubcap);
+  });
+
+  // === TRAILER ===
+  const trailerBody = box(4.4, 2.8, 13, 0x0c1218, 0.6, 0.4);
+  trailerBody.position.set(0, 2.5, 8.8);
+  trailerBody.castShadow = true;
+  truckGroup.add(trailerBody);
+
+  // Trailer accent
+  const tAccent = box(4.45, 0.1, 13.05, accentColor, 0.4, 0.5);
+  tAccent.position.set(0, 1.15, 8.8);
+  truckGroup.add(tAccent);
+
+  // Container on trailer
+  const containerColors = [0x0d1c2a, 0x081520, 0x0a1a28];
+  const cc = containerColors[Math.floor(Math.random() * 3)];
+  const container = box(4.3, 2.5, 12.5, cc, 0.75, 0.35);
+  container.position.set(0, 4.15, 8.8);
+  container.castShadow = true;
+  truckGroup.add(container);
+
+  // Container ribs
+  for (let i = -5; i <= 5; i += 2) {
+    const rib = box(4.32, 2.52, 0.08, 0x1a2a3a, 0.8, 0.5);
+    rib.position.set(0, 4.15, 8.8 + i);
+    truckGroup.add(rib);
+  }
+
+  // Tail lights
+  [-2.1, 2.1].forEach(x => {
+    const tl = box(0.5, 0.3, 0.1, 0xff2200, 0.1, 0.8);
+    tl.position.set(x, 2.6, 15.1);
+    truckGroup.add(tl);
+    const tlp = new THREE.PointLight(0xff3300, isHero ? 2 : 1, 8);
+    tlp.position.set(x, 2.6, 15.3);
+    truckGroup.add(tlp);
+  });
+
+  // Trailer wheels
+  const tWheelPos = [
+    [-2.4, 0, 13], [2.4, 0, 13],
+    [-2.5, 0, 13.8],[2.5, 0, 13.8],
+    [-2.4, 0, 7], [2.4, 0, 7],
+    [-2.5, 0, 7.8],[2.5, 0, 7.8],
+  ];
+  tWheelPos.forEach(([x, y, z]) => {
+    const tw = cylinder(0.6, 0.6, 0.5, 20, 0x181818, 0.9, 0.5);
+    tw.rotation.z = Math.PI / 2;
+    tw.position.set(x, 0.62, z);
+    tw.castShadow = true;
+    truckGroup.add(tw);
+  });
+
+  // === AI SENSOR ARRAY on top of cab ===
+  if (isHero) {
+    const sensorBar = box(3.5, 0.18, 0.6, 0x111820, 0.3, 0.8);
+    sensorBar.position.set(0, 3.96, -0.5);
+    truckGroup.add(sensorBar);
+    for (let i = -1.2; i <= 1.2; i += 0.6) {
+      const sensor = cylinder(0.06, 0.06, 0.25, 8, 0x00ffaa, 0.2, 0.9);
+      sensor.position.set(i, 4.1, -0.5);
+      truckGroup.add(sensor);
+      const sp = new THREE.PointLight(0x00ffaa, 0.8, 3);
+      sp.position.set(i, 4.2, -0.5);
+      truckGroup.add(sp);
+    }
+  }
+
+  return truckGroup;
+}
+
+// ─── CREATE TRUCKS ────────────────────────────────────────────────────────────
+const heroTruck = buildTruck(true);
+heroTruck.position.set(0, 0, -5);
+scene.add(heroTruck);
+
+const convoy = [];
+const convoyZOffsets = [18, 36, 54, 72];
+convoyZOffsets.forEach((zo, i) => {
+  const t = buildTruck(false);
+  t.position.set((i % 2) * 2 - 1, 0, zo);
+  scene.add(t);
+  convoy.push(t);
+});
+
+// Background trucks
+[-10, 10].forEach(x => {
+  const bt = buildTruck(false);
+  bt.position.set(x, 0, 25);
+  bt.scale.setScalar(0.88);
+  scene.add(bt);
+});
+
+// ─── SHIPPING CONTAINERS (yard stacks) ───────────────────────────────────────
+const containerColors2 = [0x0a1e2e, 0x0d2215, 0x1a1200, 0x0c1520];
+function placeContainerStack(x, z, rows, cols, stackH) {
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      for (let h = 0; h < stackH; h++) {
+        const cc = containerColors2[(r + c + h) % 4];
+        const cont = box(4.2, 2.4, 12, cc, 0.75, 0.3);
+        cont.position.set(x + c * 4.5, 1.2 + h * 2.5, z + r * 12.5);
+        cont.castShadow = true;
+        cont.receiveShadow = true;
+        scene.add(cont);
+      }
+    }
+  }
+}
+
+placeContainerStack(-30, -20, 3, 3, 3);
+placeContainerStack(28, -15, 2, 4, 4);
+placeContainerStack(-32, 30, 4, 2, 2);
+placeContainerStack(30, 40, 3, 3, 3);
+
+// ─── WAREHOUSES (background) ─────────────────────────────────────────────────
+function buildWarehouse(x, z, w, h, d) {
+  const g = new THREE.Group();
+  const b = box(w, h, d, 0x070e15, 0.9, 0.2);
+  b.position.set(0, h / 2, 0);
+  g.add(b);
+  // Windows
+  for (let wx = -w / 2 + 2; wx < w / 2; wx += 5) {
+    for (let wy = 2; wy < h - 1; wy += 4) {
+      const win = box(2.5, 1.8, 0.15, 0x204060, 0.1, 0.9);
+      win.position.set(wx, wy, -d / 2 - 0.08);
+      const wl = new THREE.PointLight(0x3060ff, 0.5, 8);
+      wl.position.set(wx, wy, -d / 2 - 1);
+      g.add(win);
+      g.add(wl);
+    }
+  }
+  g.position.set(x, 0, z);
+  return g;
+}
+
+scene.add(buildWarehouse(-60, 50, 40, 18, 20));
+scene.add(buildWarehouse(55, 45, 50, 22, 25));
+scene.add(buildWarehouse(-20, 75, 70, 15, 18));
+
+// ─── PORT CRANES ─────────────────────────────────────────────────────────────
+function buildCrane(x, z) {
+  const g = new THREE.Group();
+  // Vertical tower
+  const tower = box(1.5, 30, 1.5, 0x101820, 0.8, 0.5);
+  tower.position.set(0, 15, 0);
+  g.add(tower);
+  // Horizontal boom
+  const boom = box(20, 1, 1.5, 0x0d1620, 0.8, 0.5);
+  boom.position.set(8, 30, 0);
+  g.add(boom);
+  // Accent light on top
+  const cl = new THREE.PointLight(0xff4400, 1.5, 15);
+  cl.position.set(0, 31, 0);
+  g.add(cl);
+  g.position.set(x, 0, z);
+  scene.add(g);
+}
+buildCrane(-70, 80);
+buildCrane(-50, 100);
+buildCrane(70, 90);
+
+// ─── DRONES ──────────────────────────────────────────────────────────────────
+const drones = [];
+function buildDrone(x, y, z) {
+  const g = new THREE.Group();
+  const body = box(0.6, 0.2, 0.6, 0x1a1a1a, 0.3, 0.9);
+  g.add(body);
+  // Arms + rotors
+  [[-0.55, 0, -0.55],[0.55, 0, -0.55],[-0.55, 0, 0.55],[0.55, 0, 0.55]].forEach(([ax, ay, az]) => {
+    const arm = box(0.08, 0.05, 0.55, 0x111111, 0.5, 0.7);
+    arm.position.set(ax, 0, az);
+    g.add(arm);
+    const rotor = cylinder(0.22, 0.22, 0.02, 8, 0x222222, 0.3, 0.6);
+    rotor.position.set(ax, 0.1, az);
+    g.add(rotor);
+  });
+  // Green scan light
+  const scanLight = new THREE.SpotLight(0x00ff88, 5, 12, Math.PI / 6, 0.5);
+  scanLight.position.set(0, -0.3, 0);
+  scanLight.target.position.set(0, -8, 0);
+  g.add(scanLight);
+  g.add(scanLight.target);
+  const blinkLight = new THREE.PointLight(0x00ff88, 1, 3);
+  blinkLight.position.set(0, 0.2, 0);
+  g.add(blinkLight);
+  g.position.set(x, y, z);
+  scene.add(g);
+  drones.push({ mesh: g, baseY: y, ox: x, oz: z });
+  return g;
+}
+buildDrone(-3, 12, -8);
+buildDrone(8, 14, 10);
+buildDrone(-6, 11, 25);
+
+// ─── PARTICLES (data / binary floating) ──────────────────────────────────────
+const particleCount = 800;
+const pGeo = new THREE.BufferGeometry();
+const pPos = new Float32Array(particleCount * 3);
+const pCol = new Float32Array(particleCount * 3);
+for (let i = 0; i < particleCount; i++) {
+  pPos[i * 3]     = (Math.random() - 0.5) * 100;
+  pPos[i * 3 + 1] = Math.random() * 20 + 1;
+  pPos[i * 3 + 2] = (Math.random() - 0.5) * 100;
+  const r = Math.random();
+  if (r < 0.5) {
+    // Orange
+    pCol[i * 3] = 1.0; pCol[i * 3 + 1] = 0.42; pCol[i * 3 + 2] = 0.0;
+  } else {
+    // Teal
+    pCol[i * 3] = 0.0; pCol[i * 3 + 1] = 0.9; pCol[i * 3 + 2] = 0.6;
+  }
+}
+pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
+const pMat = new THREE.PointsMaterial({ size: 0.12, vertexColors: true, transparent: true, opacity: 0.7 });
+const particles = new THREE.Points(pGeo, pMat);
+scene.add(particles);
+
+// ─── HUD CANVAS OVERLAY ───────────────────────────────────────────────────────
+const hudCanvas = document.getElementById('hud-overlay');
+hudCanvas.width  = window.innerWidth;
+hudCanvas.height = window.innerHeight;
+const hctx = hudCanvas.getContext('2d');
+
+let hudAlpha = 0;
+const hudData = [
+  { x: 0.12, y: 0.28, label: 'UNIT-4721', val: 'ACTIVE', color: '#00ffaa' },
+  { x: 0.78, y: 0.35, label: 'GPS 37.7749N', val: '122.4194W', color: '#ff6a00' },
+  { x: 0.15, y: 0.62, label: 'SPEED', val: '24 KPH', color: '#00ffaa' },
+  { x: 0.82, y: 0.58, label: 'CARGO', val: '28.4T', color: '#ff6a00' },
+];
+
+function drawHUD(t) {
+  hctx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+  if (hudAlpha <= 0) return;
+
+  hudData.forEach(d => {
+    const x = d.x * hudCanvas.width;
+    const y = d.y * hudCanvas.height;
+    const a = hudAlpha;
+
+    hctx.save();
+    hctx.globalAlpha = a;
+    hctx.strokeStyle = d.color;
+    hctx.lineWidth = 1;
+
+    // Corner markers
+    const cs = 10;
+    hctx.beginPath();
+    hctx.moveTo(x - cs, y); hctx.lineTo(x, y); hctx.lineTo(x, y + cs);
+    hctx.moveTo(x + cs + 60, y); hctx.lineTo(x + cs + 60 + cs, y); hctx.lineTo(x + cs + 60 + cs, y + cs);
+    hctx.stroke();
+
+    // Label
+    hctx.font = '9px Courier New';
+    hctx.fillStyle = d.color;
+    hctx.fillText(d.label, x + 4, y + 16);
+    hctx.fillStyle = 'rgba(255,255,255,0.7)';
+    hctx.fillText(d.val, x + 4, y + 28);
+    hctx.restore();
+  });
+
+  // Animated scan line
+  const scanY = (hudCanvas.height * 0.3) + Math.sin(t * 0.8) * (hudCanvas.height * 0.15);
+  hctx.save();
+  hctx.globalAlpha = hudAlpha * 0.08;
+  hctx.fillStyle = '#00ffaa';
+  hctx.fillRect(0, scanY, hudCanvas.width, 1.5);
+  hctx.restore();
+
+  // Binary stream (left side)
+  hctx.save();
+  hctx.globalAlpha = hudAlpha * 0.3;
+  hctx.font = '8px Courier New';
+  hctx.fillStyle = '#00ffaa';
+  for (let i = 0; i < 8; i++) {
+    const bits = Math.random() > 0.5 ? '1' : '0';
+    hctx.fillText(bits.repeat(8), 20, 140 + i * 14);
+  }
+  hctx.restore();
+}
+
+// ─── CAMERA ANIMATION ────────────────────────────────────────────────────────
+// 5-phase cinematic sequence, total ~14 seconds looping
+
+const ANIM_DURATION = 14;
+let animTime = 0;
+
+// Camera keyframes
+const phases = [
+  { start: 0,    end: 2.5,  // Phase 1: Aerial establishing
+    camStart: new THREE.Vector3(0, 80, -60),
+    camEnd:   new THREE.Vector3(0, 45, -35),
+    lookStart: new THREE.Vector3(0, 0, 10),
+    lookEnd:   new THREE.Vector3(0, 0, 5),
+  },
+  { start: 2.5,  end: 5.0,  // Phase 2: Dolly forward, reveal convoy
+    camStart: new THREE.Vector3(0, 45, -35),
+    camEnd:   new THREE.Vector3(-8, 22, -20),
+    lookStart: new THREE.Vector3(0, 0, 5),
+    lookEnd:   new THREE.Vector3(0, 2, 15),
+  },
+  { start: 5.0,  end: 8.5,  // Phase 3: Hero orbit 180°
+    camStart: new THREE.Vector3(-8, 22, -20),
+    camEnd:   new THREE.Vector3(-8, 22, -20), // computed via orbit
+    lookStart: new THREE.Vector3(0, 2, -5),
+    lookEnd:   new THREE.Vector3(0, 2, -5),
+    orbit: true,
+    orbitCenter: new THREE.Vector3(0, 3, -5),
+    orbitRadius: 22,
+    orbitStartAngle: -2.4,
+    orbitEndAngle: 0.75,
+    orbitHeight: [5, 3.5],
+  },
+  { start: 8.5,  end: 11.0, // Phase 4: Tracking shot, truck drives forward
+    camStart: new THREE.Vector3(-12, 5, -22),
+    camEnd:   new THREE.Vector3(-12, 5, 10),
+    lookStart: new THREE.Vector3(0, 3, -5),
+    lookEnd:   new THREE.Vector3(0, 3, 20),
+  },
+  { start: 11.0, end: 14.0, // Phase 5: Crane up, full yard reveal + HUD bloom
+    camStart: new THREE.Vector3(-12, 5, 10),
+    camEnd:   new THREE.Vector3(-5, 50, -30),
+    lookStart: new THREE.Vector3(0, 3, 20),
+    lookEnd:   new THREE.Vector3(0, 0, 30),
+  },
+];
+
+function easeInOut(t) {
+  return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+}
+
+function easeIn(t) { return t * t * t; }
+function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+
+// Truck convoy movement
+let truckZ = 0;
+
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const delta = clock.getDelta();
+  animTime += delta;
+  const loopTime = animTime % ANIM_DURATION;
+  const t = loopTime; // 0..14
+
+  // Truck movement
+  truckZ -= delta * 3.5;
+  heroTruck.position.z = -5 + truckZ;
+  convoy.forEach((tr, i) => {
+    tr.position.z = 18 + i * 18 + truckZ;
+  });
+
+  // Drone hover
+  drones.forEach((d, i) => {
+    d.mesh.position.y = d.baseY + Math.sin(animTime * 1.2 + i * 2.1) * 0.5;
+    d.mesh.rotation.y = animTime * 0.3 + i;
+    d.mesh.position.x = d.ox + Math.sin(animTime * 0.5 + i) * 1.5;
+    d.mesh.position.z = d.oz + heroTruck.position.z - (-5);
+  });
+
+  // Particle drift
+  const pp = particles.geometry.attributes.position.array;
+  for (let i = 0; i < particleCount; i++) {
+    pp[i * 3 + 1] += delta * (0.15 + (i % 5) * 0.04);
+    if (pp[i * 3 + 1] > 22) pp[i * 3 + 1] = Math.random() * 1;
+  }
+  particles.geometry.attributes.position.needsUpdate = true;
+  particles.rotation.y += delta * 0.01;
+
+  // Data lines pulse
+  dataLineGroup.children.forEach((line, i) => {
+    line.material.opacity = 0.25 + Math.sin(animTime * 2 + i) * 0.15;
+  });
+
+  // ── Camera phase ──
+  let phase = phases[phases.length - 1];
+  for (let p of phases) {
+    if (t >= p.start && t < p.end) { phase = p; break; }
+  }
+  const pDur = phase.end - phase.start;
+  const pT = Math.max(0, Math.min(1, (t - phase.start) / pDur));
+  const et = easeInOut(pT);
+
+  if (phase.orbit) {
+    const angle = phase.orbitStartAngle + (phase.orbitEndAngle - phase.orbitStartAngle) * et;
+    const h = phase.orbitHeight[0] + (phase.orbitHeight[1] - phase.orbitHeight[0]) * et;
+    const cx = phase.orbitCenter.x + Math.cos(angle) * phase.orbitRadius;
+    const cz = phase.orbitCenter.z + Math.sin(angle) * phase.orbitRadius + heroTruck.position.z - (-5);
+    camera.position.set(cx, h, cz);
+
+    const lookZ = phase.orbitCenter.z + heroTruck.position.z - (-5);
+    camera.lookAt(phase.orbitCenter.x, phase.orbitCenter.y, lookZ);
+  } else {
+    camera.position.lerpVectors(phase.camStart, phase.camEnd, et);
+
+    const lookOffset = heroTruck.position.z - (-5);
+    const lx = phase.lookStart.x + (phase.lookEnd.x - phase.lookStart.x) * et;
+    const ly = phase.lookStart.y + (phase.lookEnd.y - phase.lookStart.y) * et;
+    const lz = (phase.lookStart.z + (phase.lookEnd.z - phase.lookStart.z) * et) + lookOffset;
+    camera.lookAt(lx, ly, lz);
+  }
+
+  // Adjust camera Z for truck movement
+  if (!phase.orbit && t >= phases[3].start) {
+    const trackOffset = heroTruck.position.z - (-5);
+    camera.position.z += trackOffset * (t >= phases[4].start ? 0.3 : 0.85);
+  }
+
+  // HUD alpha — fade in phase 3, peak in phase 5
+  if (t < phases[2].start) hudAlpha = 0;
+  else if (t < phases[2].end) hudAlpha = easeIn((t - phases[2].start) / (phases[2].end - phases[2].start)) * 0.85;
+  else if (t < phases[4].end) hudAlpha = 0.85;
+  else hudAlpha = Math.max(0, 0.85 - (t - phases[4].end) * 2);
+
+  drawHUD(animTime);
+  renderer.render(scene, camera);
+}
+
+// ─── RESIZE ──────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  hudCanvas.width  = window.innerWidth;
+  hudCanvas.height = window.innerHeight;
+});
+
+animate();
+</script>
+</body>
+</html>
